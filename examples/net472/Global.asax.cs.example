@@ -1,0 +1,24 @@
+// Example only: merge into your ASP.NET .NET Framework 4.7.2 application's Global.asax.cs.
+// Add a reference to the Akeyless.Bootstrap.Net472 project (or its compiled DLL).
+// If you use MVC / Web API, keep your existing registrations; only add the bootstrap call.
+
+using System;
+using System.Web;
+using Akeyless.Bootstrap;
+
+namespace YourWebApplication
+{
+    public class MvcApplication : HttpApplication
+    {
+        protected void Application_Start()
+        {
+            AkeylessFrameworkBootstrapper.LoadSecretsAtStartup();
+
+            // Resolved values (example — do not log):
+            // var apiKey = AkeylessConfig.Get("ApiSharedKey");
+            // var sql = AkeylessConfig.Get("ConnectionStrings:DefaultConnection");
+
+            // ... your existing Application_Start logic (routes, bundles, DI, etc.)
+        }
+    }
+}

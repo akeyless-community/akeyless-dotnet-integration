@@ -1,0 +1,16 @@
+<!--
+  PRD-style secret references (plaintext in web.config is only the reference, not the secret value).
+  Merge into your web.config <configuration> as needed. External settings files linked via configSource
+  are merged by the framework when discovered through WebConfigurationManager.
+-->
+<configuration>
+  <appSettings>
+    <!-- Logical key "ApiSharedKey" — resolved in memory via AkeylessConfig.Get("ApiSharedKey") -->
+    <add key="ApiSharedKey" value="akeyless:///prod/legacy-iis/api-shared-key" />
+  </appSettings>
+  <connectionStrings>
+    <add name="DefaultConnection"
+         connectionString="akeyless:///prod/legacy-iis/sql-connection-string"
+         providerName="System.Data.SqlClient" />
+  </connectionStrings>
+</configuration>

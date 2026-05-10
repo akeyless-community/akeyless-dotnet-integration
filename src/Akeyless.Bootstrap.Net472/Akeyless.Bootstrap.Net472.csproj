@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>Akeyless.Bootstrap</RootNamespace>
+    <AssemblyName>Akeyless.Bootstrap.Net472</AssemblyName>
+    <Nullable>disable</Nullable>
+    <LangVersion>9.0</LangVersion>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Last line on NuGet that targets netstandard2.0 (required for .NET Framework). 2.20.2+ is .NETStandard2.1-only. -->
+    <PackageReference Include="akeyless" Version="2.20.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Web" />
+  </ItemGroup>
+</Project>
