@@ -12,7 +12,11 @@
     <PackageReference Include="akeyless" Version="2.20.1" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Akeyless.Agent.Client\Akeyless.Agent.Client.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="System.Configuration" />
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.Web" />
   </ItemGroup>
 </Project>

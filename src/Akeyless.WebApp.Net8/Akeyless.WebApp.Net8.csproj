@@ -9,4 +9,7 @@
   <ItemGroup>
     <PackageReference Include="akeyless" Version="5.0.25" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Akeyless.Agent.Client\Akeyless.Agent.Client.csproj" />
+  </ItemGroup>
 </Project>

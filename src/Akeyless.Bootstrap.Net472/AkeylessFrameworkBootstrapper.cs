@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using akeyless.Api;
-using akeyless.Client;
-using akeyless.Model;
 
 namespace Akeyless.Bootstrap
 {
@@ -115,45 +112,24 @@ namespace Akeyless.Bootstrap
                     return true;
                 }
 
-                var gatewayUrl = Environment.GetEnvironmentVariable("AKEYLESS_GW_URL");
-                if (string.IsNullOrWhiteSpace(gatewayUrl))
-                {
-                    gatewayUrl = "https://api.akeyless.io";
-                }
-
-                var accessId = Environment.GetEnvironmentVariable("AKEYLESS_ACCESS_ID");
-                var accessKey = Environment.GetEnvironmentVariable("AKEYLESS_ACCESS_KEY");
-                if (string.IsNullOrEmpty(accessId) || string.IsNullOrEmpty(accessKey))
-                {
-                    throw new InvalidOperationException(
-                        "Set AKEYLESS_ACCESS_ID and AKEYLESS_ACCESS_KEY for the IIS app pool (or process) environment.");
-                }
-
                 var uniquePaths = bindings
                     .Select(b => b.SecretPath)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                var cfg = new Configuration { BasePath = gatewayUrl };
-                var api = new V2Api(cfg);
-
-                var authResult = api.Auth(new Auth(accessId: accessId, accessKey: accessKey));
-                if (authResult == null || string.IsNullOrEmpty(authResult.Token))
+                var agentUrl = Environment.GetEnvironmentVariable("AKEYLESS_AGENT_URL");
+                if (string.IsNullOrWhiteSpace(agentUrl))
                 {
-                    throw new InvalidOperationException("Akeyless authentication did not return a token.");
+                    var accessId = Environment.GetEnvironmentVariable("AKEYLESS_ACCESS_ID");
+                    var accessKey = Environment.GetEnvironmentVariable("AKEYLESS_ACCESS_KEY");
+                    if (string.IsNullOrEmpty(accessId) || string.IsNullOrEmpty(accessKey))
+                    {
+                        throw new InvalidOperationException(
+                            "Set AKEYLESS_AGENT_URL for the local agent, or set AKEYLESS_ACCESS_ID and AKEYLESS_ACCESS_KEY for direct Gateway access.");
+                    }
                 }
 
-                var body = new GetSecretValue(names: uniquePaths, token: authResult.Token);
-                var raw = api.GetSecretValue(body) ?? new Dictionary<string, string>();
-
-                var pathToValue = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var kv in raw)
-                {
-                    var normalizedKey = string.IsNullOrEmpty(kv.Key)
-                        ? kv.Key
-                        : (kv.Key.StartsWith("/", StringComparison.Ordinal) ? kv.Key : "/" + kv.Key);
-                    pathToValue[normalizedKey] = kv.Value ?? string.Empty;
-                }
+                var pathToValue = SecretPathResolver.FetchPathToValues(uniquePaths);
 
                 var logical = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var bind in bindings)

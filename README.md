@@ -5,7 +5,7 @@ Sample code for loading secrets from the Akeyless Gateway at application startup
 ## How it works
 
 1. **Discovery** — At startup, the library finds every configuration value that looks like `akeyless:///path/to/item` (plus optional `AKEYLESS_SECRET_NAMES`).
-2. **Fetch** — It authenticates with `AKEYLESS_ACCESS_ID` / `AKEYLESS_ACCESS_KEY` and retrieves those items in one batch.
+2. **Fetch** — Either the **local IIS Agent** (`AKEYLESS_AGENT_URL`, recommended for production) resolves paths over **loopback HTTP**, or each process calls the **Gateway** directly using `AKEYLESS_ACCESS_ID` / `AKEYLESS_ACCESS_KEY`.
 3. **Enrich** — Resolved values override the placeholders for consumers:
    - **.NET 8:** an in-memory configuration layer is added on top of `appsettings.json` / environment so **`IConfiguration`**, **`IOptions<T>`**, and **`builder.Configuration`** see the **resolved** string—same keys as before, no parallel “secret API” in feature code.
    - **.NET Framework:** resolved values are merged in **`AkeylessConfig`**, which reads **Akeyless first**, then **`ConfigurationManager`** (`AppSettings` / `ConnectionStrings`). Use **`AkeylessConfig`** (or a thin wrapper that delegates to it) as the **single** read path for settings that may be backed by Akeyless or plain XML.
@@ -19,20 +19,33 @@ Logical keys for discovery match runtime lookup:
 
 Paths are normalized with a leading `/` (for example `akeyless:///prod/db/password` → `/prod/db/password`).
 
+## Windows IIS Agent (PRD)
+
+The **`Akeyless.IIS.Agent`** project is a **.NET 8** executable intended to run as a **Windows Service** on IIS servers. It:
+
+- Listens only on **loopback** (default `http://127.0.0.1:17890`; validated at startup).
+- Authenticates to the **Akeyless Gateway** and maintains an **in-memory cache** with TTL (`AkeylessAgent:CacheTtlSeconds`).
+- Exposes **`POST /api/v1/resolve`** (batch paths → values) and **`POST /api/v1/discover-and-resolve`** (parse an allowlisted `web.config` path and resolve all `akeyless://` entries).
+
+**IIS application pools** should set **`AKEYLESS_AGENT_URL`** to the agent base URL. They **do not** need `AKEYLESS_ACCESS_ID` / `AKEYLESS_ACCESS_KEY` when the agent is used.
+
+Publish the agent, configure `appsettings.json` (or environment variables such as `AkeylessAgent__AccessId`), install as a service — see **`scripts/install-windows-service.example.md`**.
+
 ## Requirements
 
-- Network path from the host to Akeyless SaaS or your Gateway (`AKEYLESS_GW_URL`).
-- Access ID and Access Key available to the process (for example IIS app pool environment variables).
+- **With agent:** IIS worker must reach **loopback** to the agent URL; the **agent** host must reach **`AkeylessAgent:GatewayUrl`**.
+- **Without agent:** process must reach **`AKEYLESS_GW_URL`** and expose **`AKEYLESS_ACCESS_ID`** / **`AKEYLESS_ACCESS_KEY`** (for example on the app pool).
 - **.NET Framework:** 4.7.2 (or 4.6.1+) and NuGet package `akeyless` **2.20.1** (last line targeting `netstandard2.0` for Framework).
-- **.NET 8:** current `akeyless` package as referenced by the sample project.
+- **.NET 8:** current `akeyless` package as referenced by the sample projects.
 
 ## Environment variables
 
 | Variable | Description |
 |----------|-------------|
-| `AKEYLESS_GW_URL` | Gateway base URL (default `https://api.akeyless.io`). |
-| `AKEYLESS_ACCESS_ID` | Access ID. |
-| `AKEYLESS_ACCESS_KEY` | Access Key. |
+| `AKEYLESS_AGENT_URL` | **Recommended:** base URL of the local agent (e.g. `http://127.0.0.1:17890`). When set, **Gateway credentials are not required** on the app pool. |
+| `AKEYLESS_GW_URL` | Gateway base URL for **direct** mode (no agent). Default `https://api.akeyless.io`. |
+| `AKEYLESS_ACCESS_ID` | Access ID (direct mode only, unless agent URL is unset). |
+| `AKEYLESS_ACCESS_KEY` | Access Key (direct mode only). |
 | `AKEYLESS_SECRET_NAMES` | Optional fallback: `/path/one;/path/two` when you are not using `akeyless://` in config. Logical key equals the path. |
 | `AKEYLESS_CACHE_TTL_SECONDS` | Optional **(.NET Framework library only)**; if set to a positive number of seconds, periodically re-fetches secrets into the in-memory overlay (see `AkeylessFrameworkBootstrapper`). |
 
@@ -150,6 +163,20 @@ If there are **no** `akeyless://` bindings, the Gateway is not called and startu
 
 **TTL note:** periodic refresh is implemented on the **.NET Framework** bootstrapper (`AKEYLESS_CACHE_TTL_SECONDS`). The **.NET 8** enrichment path in this sample is **one-shot** at host build; add a hosted refresh if you need the same behavior on Core.
 
+## Tests
+
+```bash
+dotnet test Akeyless.DotNet.Samples.sln -c Release
+```
+
+`tests/Akeyless.Integration.Tests` (xUnit) covers:
+
+- **IIS Agent HTTP API** (`/health`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`) using `WebApplicationFactory` with a **fake** gateway (no real Akeyless calls).
+- **`Akeyless.Agent.Client`** HTTP serialization against a stub handler.
+- **`SecretReferenceParser`**, **`AllowedPathValidator`**, **`ConfigurationDiscoveryService`** (XML + `configSource`), and **ASP.NET Core `ConfigurationSecretDiscovery`**.
+
+GitHub Actions runs the same command on **push** and **pull request** (`.github/workflows/dotnet.yml`).
+
 ## Build this repository
 
 ```bash
@@ -166,10 +193,13 @@ Open `/health` for a trivial JSON response (no secret material).
 
 ## Repository layout
 
+- `src/Akeyless.IIS.Agent` — **Windows Service** host: loopback REST, Gateway auth, cache, optional XML discovery.
+- `src/Akeyless.Agent.Client` — **netstandard2.0** HTTP client for the agent (referenced by Framework + Core samples).
 - `src/Akeyless.Bootstrap.Net472` — .NET Framework library.
-- `src/Akeyless.WebApp.Net8` — ASP.NET Core 8 sample (`AkeylessConfigurationExtensions`, `AkeylessSecretResolver`).
-- `examples/` — `web.config`, `Global.asax`, JSON, and optional trace listener examples.
-- `docs/PRD-compliance.md` — Requirement mapping for the Legacy IIS PRD.
+- `src/Akeyless.WebApp.Net8` — ASP.NET Core 8 sample.
+- `scripts/` — example Windows service install notes.
+- `examples/` — `web.config`, `Global.asax`, JSON, optional trace listener.
+- `tests/Akeyless.Integration.Tests` — xUnit tests + CI scenarios for agent, client, and discovery helpers.
 
 ## Security note
 
