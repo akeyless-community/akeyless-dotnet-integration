@@ -14,8 +14,8 @@ This document maps the repository to **PRD: Akeyless Secrets Provider for Legacy
 | **Recursive configSource / deep FS** | Partial | Relies on **ConfigurationManager / WebConfigurationManager** merge behavior; exotic multi-hop patterns may need extra work. |
 | **Zero-disk secret values** | Implemented | Resolved values stay in **process memory** only (not written by this code). |
 | **Local Agent: localhost REST / named pipe** | Not in repo | **Gap vs full PRD.** Current transport: **HTTPS to Gateway** from the app process. Same discovery and `AkeylessConfig` API can later call `http://127.0.0.1:...` when the Agent ships. |
-| **`AkeylessConfig.Get("SecretName")` developer API** | Implemented | `AkeylessConfig.Get` / `TryGet` on .NET Framework; .NET 8 uses `AkeylessMemorySecrets` with the same logical keys as configuration paths. |
-| **In-memory cache + configurable TTL** | Implemented | Optional **`AKEYLESS_CACHE_TTL_SECONDS`**: periodic in-process refresh (reduces Gateway round-trips). |
+| **`AkeylessConfig` / unified configuration reads** | Implemented | **Framework:** `AkeylessConfig` merges resolved secrets with **`ConfigurationManager`** (single read API). **.NET 8:** `AddAkeylessResolvedSecrets` enriches **`IConfiguration`** via in-memory overrides; normal `IConfiguration` / `IOptions` consumption. |
+| **In-memory cache + configurable TTL** | Partial | Optional **`AKEYLESS_CACHE_TTL_SECONDS`** on **.NET Framework** bootstrapper only. **.NET 8** sample is one-shot enrich at startup (extend with a hosted service if you need periodic refresh). |
 | **Auth: API Key** | Implemented | `AKEYLESS_ACCESS_ID` / `AKEYLESS_ACCESS_KEY`. |
 | **Auth: CSP IAM, Cert, UID** | Not implemented | Extend with additional `Auth` overloads from the Akeyless SDK or Gateway-side identity; tracked as product follow-up. |
 | **Connection pooling to Gateway** | SDK / runtime | Handled by the underlying HTTP stack / RestSharp in the official client; no extra pooling layer in this sample. |
@@ -25,4 +25,4 @@ This document maps the repository to **PRD: Akeyless Secrets Provider for Legacy
 
 ## Architect’s note (PRD)
 
-The PRD states that on Windows/IIS, **dynamic rotation** for legacy monoliths favors an **in-memory cache provider** because env injection often implies recycle. This repo’s **TTL refresh** is a step in that direction; a **long-lived Agent** with a localhost API remains the **full** PRD end state for centralizing cache and policy.
+The PRD states that on Windows/IIS, **dynamic rotation** for legacy monoliths favors an **in-memory cache provider** because env injection often implies recycle. This repo’s **TTL refresh** on the **.NET Framework** path is a step in that direction; a **long-lived Agent** with a localhost API remains the **full** PRD end state for centralizing cache and policy.

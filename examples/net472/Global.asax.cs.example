@@ -14,9 +14,9 @@ namespace YourWebApplication
         {
             AkeylessFrameworkBootstrapper.LoadSecretsAtStartup();
 
-            // Resolved values (example — do not log):
-            // var apiKey = AkeylessConfig.Get("ApiSharedKey");
-            // var sql = AkeylessConfig.Get("ConnectionStrings:DefaultConnection");
+            // Resolved values — use AkeylessConfig (merged with ConfigurationManager); do not log:
+            // var apiKey = AkeylessConfig.GetAppSetting("ApiSharedKey");
+            // var sql = AkeylessConfig.GetConnectionString("DefaultConnection");
 
             // ... your existing Application_Start logic (routes, bundles, DI, etc.)
         }

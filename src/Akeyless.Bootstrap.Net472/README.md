@@ -6,10 +6,10 @@ Implements PRD-oriented behavior for **legacy IIS**: discover **`akeyless://`** 
 
 This project references **`akeyless` 2.20.1** ( **`netstandard2.0`** ), the last line compatible with **.NET Framework**. Newer **`akeyless` 5.x** packages target **`net6.0`** only.
 
-## Developer API (PRD)
+## Developer API
 
 - **`AkeylessFrameworkBootstrapper.LoadSecretsAtStartup()`** — call from **`Global.asax`** **`Application_Start`**.
-- **`AkeylessConfig.Get("LogicalKey")`** / **`TryGet`** — read resolved secrets (e.g. appSettings key or `ConnectionStrings:Name`).
+- **`AkeylessConfig`** — **single read surface**: **`GetAppSetting`**, **`GetConnectionString`**, or **`Get` / `TryGet`** (supports `ConnectionStrings:name`). Resolved Akeyless values take precedence; otherwise the value comes from **`ConfigurationManager`** as usual. **`ConfigurationManager` itself is not mutated**; route reads through **`AkeylessConfig`** (or your static helper delegating to it).
 
 ## Environment variables
 
