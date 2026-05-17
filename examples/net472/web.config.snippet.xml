@@ -5,7 +5,7 @@
 -->
 <configuration>
   <appSettings>
-    <!-- Logical key "ApiSharedKey" — resolved in memory via AkeylessConfig.Get("ApiSharedKey") -->
+    <!-- Logical key "ApiSharedKey" — resolved at startup; read via ConfigurationManager or AppConfiguration -->
     <add key="ApiSharedKey" value="akeyless:///prod/legacy-iis/api-shared-key" />
   </appSettings>
   <connectionStrings>

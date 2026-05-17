@@ -28,4 +28,4 @@ Host like any ASP.NET Core 8 app (in-process or out-of-process). Configure the s
 
 ## Relationship to .NET Framework 4.7.2
 
-Use **`Akeyless.Bootstrap.Net472`** with **`Global.asax`** and **`AkeylessConfig`** (merged reads). This project is the **.NET 8** counterpart using **`ConfigurationManager.AddInMemoryCollection`** via **`AddAkeylessResolvedSecrets`**.
+Use **`Akeyless.Bootstrap.Net472`** with **`EnrichConfigurationAtStartup`** in **`Global.asax`**, then **`ConfigurationManager`** or **`AppConfiguration`**. This project is the **.NET 8** counterpart: **`AddAkeylessResolvedSecrets`** enriches **`IConfiguration`** at startup.

@@ -6,9 +6,9 @@ Sample code for loading secrets from the Akeyless Gateway at application startup
 
 1. **Discovery** — At startup, the library finds every configuration value that looks like `akeyless:///path/to/item` (plus optional `AKEYLESS_SECRET_NAMES`).
 2. **Fetch** — Either the **local IIS Agent** (`AKEYLESS_AGENT_URL`, recommended for production) resolves paths over **loopback HTTP**, or each process calls the **Gateway** directly using `AKEYLESS_ACCESS_ID` / `AKEYLESS_ACCESS_KEY`.
-3. **Enrich** — Resolved values override the placeholders for consumers:
-   - **.NET 8:** an in-memory configuration layer is added on top of `appsettings.json` / environment so **`IConfiguration`**, **`IOptions<T>`**, and **`builder.Configuration`** see the **resolved** string—same keys as before, no parallel “secret API” in feature code.
-   - **.NET Framework:** resolved values are merged in **`AkeylessConfig`**, which reads **Akeyless first**, then **`ConfigurationManager`** (`AppSettings` / `ConnectionStrings`). Use **`AkeylessConfig`** (or a thin wrapper that delegates to it) as the **single** read path for settings that may be backed by Akeyless or plain XML.
+3. **Enrich** — Resolved values override the placeholders during startup. After that, application code uses configuration **as usual** (no branching on Akeyless vs file):
+   - **.NET 8:** an in-memory layer is added on top of `appsettings.json` / environment so **`IConfiguration`**, **`IOptions<T>`**, and **`builder.Configuration`** return the resolved string.
+   - **.NET Framework:** resolved values are written onto **`ConfigurationManager`** where the platform allows (connection strings in-place; app settings via IIS `web.config` metadata when available). Any key that cannot be patched in-place is still served through the same keys via a small in-memory overlay—use **`ConfigurationManager`** or point your existing static helper at **`AppConfiguration`** (one delegation, no per-key Akeyless logic).
 
 Logical keys for discovery match runtime lookup:
 
@@ -76,36 +76,35 @@ More patterns: `examples/net472/web.config.snippet.xml`.
 
 ### 3. Load at application start
 
-In `Global.asax.cs`, call the bootstrapper before the rest of your startup logic:
+In `Global.asax.cs`, enrich configuration once before the rest of your startup logic:
 
 ```csharp
 protected void Application_Start()
 {
-    Akeyless.Bootstrap.AkeylessFrameworkBootstrapper.LoadSecretsAtStartup();
+    Akeyless.Bootstrap.AkeylessFrameworkBootstrapper.EnrichConfigurationAtStartup();
     // Register routes, DI, etc.
 }
 ```
+
+(`LoadSecretsAtStartup()` is an equivalent alias.)
 
 See `examples/net472/Global.asax.cs.example` for a paste-friendly template.
 
 ### 4. Read configuration (single surface)
 
-**`ConfigurationManager` is not rewritten in place** (that is unsupported for most keys). After bootstrap, use **`AkeylessConfig`**, which returns the resolved secret when the key was an `akeyless://` reference and otherwise returns the same value **`ConfigurationManager`** would expose for plain settings:
+After enrichment, use **`ConfigurationManager`** as you do today, or keep your existing static helper and delegate it to **`AppConfiguration`** (same method names; no Akeyless-specific branches in feature code):
 
 ```csharp
-string apiKey = Akeyless.Bootstrap.AkeylessConfig.GetAppSetting("MyApiKey");
-string sql = Akeyless.Bootstrap.AkeylessConfig.GetConnectionString("DefaultConnection");
+// Typical — works for connection strings and many appSettings after enrichment:
+string apiKey = ConfigurationManager.AppSettings["MyApiKey"];
+string sql = ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
 
-// Or unified key form (connection strings use the ConnectionStrings: prefix):
-string sql2 = Akeyless.Bootstrap.AkeylessConfig.Get("ConnectionStrings:DefaultConnection");
-
-if (Akeyless.Bootstrap.AkeylessConfig.TryGetAppSetting("OptionalKey", out var value))
-{
-    // use value
-}
+// Or via AppConfiguration (recommended if you already centralize reads in a helper):
+string apiKey2 = Akeyless.Bootstrap.AppConfiguration.GetAppSetting("MyApiKey");
+string sql2 = Akeyless.Bootstrap.AppConfiguration.GetConnectionString("DefaultConnection");
 ```
 
-Point existing static configuration helpers at **`AkeylessConfig`** (or delegate to it) so callers never distinguish Akeyless-backed keys from ordinary keys.
+Point your static configuration helper at **`AppConfiguration.TryGet` / `Get`** once; callers stay unchanged.
 
 After an IIS app pool recycle, `Application_Start` runs again and secrets are reloaded.
 
@@ -134,7 +133,7 @@ Example file: `examples/net8/appsettings.akeyless.example.json`.
 
 ### 2. Startup (one line)
 
-Call **`AddAkeylessResolvedSecrets`** immediately after **`WebApplication.CreateBuilder`**. It reads the current configuration, resolves all `akeyless://` values from the Gateway, and registers an **in-memory** configuration source **last**, so resolved values **override** placeholders for the rest of the host lifetime:
+Call **`AddAkeylessResolvedSecrets`** immediately after **`WebApplication.CreateBuilder`**. It reads the current configuration, resolves all `akeyless://` values, and registers an **in-memory** configuration source **last**, so resolved values **override** placeholders for the rest of the host lifetime:
 
 ```csharp
 using Akeyless.WebApp.Net8;
@@ -143,6 +142,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddAkeylessResolvedSecrets();
 
 var app = builder.Build();
+```
+
+Alternative (same enrichment, earlier in the pipeline):
+
+```csharp
+builder.Host.ConfigureAppConfiguration((_, config) => config.AddAkeylessResolvedSecrets());
 ```
 
 Optional: pass an **`ILogger`** into the overload for structured diagnostics (counts only).
@@ -173,7 +178,7 @@ dotnet test Akeyless.DotNet.Samples.sln -c Release
 
 - **IIS Agent HTTP API** (`/health`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`) using `WebApplicationFactory` with a **fake** gateway (no real Akeyless calls).
 - **`Akeyless.Agent.Client`** HTTP serialization against a stub handler.
-- **`SecretReferenceParser`**, **`AllowedPathValidator`**, **`ConfigurationDiscoveryService`** (XML + `configSource`), and **ASP.NET Core `ConfigurationSecretDiscovery`**.
+- **`SecretReferenceParser`**, **`AllowedPathValidator`**, **`ConfigurationDiscoveryService`** (XML + `configSource`), **ASP.NET Core `ConfigurationSecretDiscovery`**, and **Framework `AppConfiguration`** read semantics (resolved vs placeholder).
 
 GitHub Actions runs the same command on **push** and **pull request** (`.github/workflows/dotnet.yml`).
 

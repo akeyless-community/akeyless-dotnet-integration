@@ -5,7 +5,8 @@ using System.Linq;
 namespace Akeyless.Bootstrap
 {
     /// <summary>
-    /// Loads secrets from Akeyless at startup (PRD: discovery from XML + env), keeps them in memory, optional TTL refresh.
+    /// Discovers <c>akeyless://</c> references at startup, fetches secrets, and enriches <see cref="ConfigurationManager"/>
+    /// (plus an in-memory overlay when in-place enrichment is not supported).
     /// </summary>
     public static class AkeylessFrameworkBootstrapper
     {
@@ -13,7 +14,16 @@ namespace Akeyless.Bootstrap
         private static System.Threading.Timer _refreshTimer;
 
         /// <summary>
-        /// Full load: discover <c>akeyless://</c> references, authenticate, fetch, populate <see cref="AppSecrets"/>,
+        /// Preferred entry point: discover, fetch, enrich <see cref="ConfigurationManager"/>, and start optional TTL refresh.
+        /// Application code can keep using <see cref="ConfigurationManager"/> or <see cref="AppConfiguration"/>.
+        /// </summary>
+        public static void EnrichConfigurationAtStartup()
+        {
+            LoadSecretsAtStartup();
+        }
+
+        /// <summary>
+        /// Full load: discover <c>akeyless://</c> references, authenticate, fetch, enrich configuration,
         /// start optional cache refresh timer (<c>AKEYLESS_CACHE_TTL_SECONDS</c>).
         /// </summary>
         public static void LoadSecretsAtStartup()
@@ -144,6 +154,7 @@ namespace Akeyless.Bootstrap
                 }
 
                 AppSecrets.ReplaceAll(logical);
+                ConfigurationManagerEnricher.ApplyResolvedValues(logical);
                 AkeylessIntegrationLog.Info("Akeyless secrets loaded into memory, count=" + logical.Count + ".");
                 return true;
             }

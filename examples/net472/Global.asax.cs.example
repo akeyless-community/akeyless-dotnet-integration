@@ -3,6 +3,7 @@
 // If you use MVC / Web API, keep your existing registrations; only add the bootstrap call.
 
 using System;
+using System.Configuration;
 using System.Web;
 using Akeyless.Bootstrap;
 
@@ -12,11 +13,14 @@ namespace YourWebApplication
     {
         protected void Application_Start()
         {
-            AkeylessFrameworkBootstrapper.LoadSecretsAtStartup();
+            AkeylessFrameworkBootstrapper.EnrichConfigurationAtStartup();
 
-            // Resolved values — use AkeylessConfig (merged with ConfigurationManager); do not log:
-            // var apiKey = AkeylessConfig.GetAppSetting("ApiSharedKey");
-            // var sql = AkeylessConfig.GetConnectionString("DefaultConnection");
+            // After enrichment, use ConfigurationManager as usual (do not log secrets):
+            // var apiKey = ConfigurationManager.AppSettings["ApiSharedKey"];
+            // var sql = ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+
+            // Or delegate your existing static helper to AppConfiguration once:
+            // var apiKey = AppConfiguration.GetAppSetting("ApiSharedKey");
 
             // ... your existing Application_Start logic (routes, bundles, DI, etc.)
         }

@@ -17,7 +17,7 @@ This document maps the repository to **PRD: Akeyless Secrets Provider for Legacy
 | **Named pipe** | Not implemented | PRD allows REST **or** pipe; REST satisfies the local-channel requirement. Pipe can be added later without changing Gateway semantics. |
 | **Memory cache + TTL (agent)** | Implemented | `IMemoryCache` per path in agent (`CacheTtlSeconds`). |
 | **High concurrency / pooling** | Partial | Agent reuses **single `V2Api`** and **auth token** in-process; HTTP keep-alive via `HttpClient` defaults. |
-| **`AkeylessConfig` / unified configuration** | Implemented | Framework merged reads; .NET 8 `AddAkeylessResolvedSecrets`. |
+| **Startup enrichment / unified configuration** | Implemented | Framework: `EnrichConfigurationAtStartup` patches `ConfigurationManager` + overlay; `AppConfiguration` for static helpers. .NET 8: `AddAkeylessResolvedSecrets` on `IConfiguration`. No custom `SettingsProvider` in app code. |
 | **Auth: API Key** | Implemented | Agent + direct path use Access ID / Key. |
 | **Auth: CSP IAM, Cert, UID** | Not implemented | Extend `GatewaySecretService` / SDK `Auth` overloads; configuration hooks reserved. |
 | **Logging & auditing (no secret values)** | Implemented | Agent + app log **counts/phases**; optional **Windows Event Log** for agent. |
