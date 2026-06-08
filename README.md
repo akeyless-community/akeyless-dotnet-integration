@@ -2,6 +2,8 @@
 
 Sample code for loading secrets from the Akeyless Gateway at application startup and keeping resolved values in process memory only. You declare **references** (not plaintext secrets) using the `akeyless://` URI scheme in configuration or environment variables; the library authenticates, calls the Gateway, and **enriches** configuration so application code can keep using **one** configuration surface.
 
+**Step-by-step guide:** [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) — architecture, component roles, agent setup, and Framework / Core integration in order.
+
 ## How it works
 
 1. **Discovery** — At startup, the library finds every configuration value that looks like `akeyless:///path/to/item` (plus optional `AKEYLESS_SECRET_NAMES`).
@@ -178,7 +180,9 @@ dotnet test Akeyless.DotNet.Samples.sln -c Release
 
 - **IIS Agent HTTP API** (`/health`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`) using `WebApplicationFactory` with a **fake** gateway (no real Akeyless calls).
 - **`Akeyless.Agent.Client`** HTTP serialization against a stub handler.
-- **`SecretReferenceParser`**, **`AllowedPathValidator`**, **`ConfigurationDiscoveryService`** (XML + `configSource`), **ASP.NET Core `ConfigurationSecretDiscovery`**, and **Framework `AppConfiguration`** read semantics (resolved vs placeholder).
+- **`SecretReferenceParser`**, **`AllowedPathValidator`**, **`ConfigurationDiscoveryService`** (XML + `configSource`), and **ASP.NET Core `ConfigurationSecretDiscovery`**.
+
+See [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md#14-what-has-been-tested) for full coverage and manual validation gaps.
 
 GitHub Actions runs the same command on **push** and **pull request** (`.github/workflows/dotnet.yml`).
 
@@ -209,6 +213,13 @@ Open `/health` for a trivial JSON response (no secret material).
 ## Security note
 
 Do not log secret values, connection strings, or raw API error bodies in production.
+
+## Further reading
+
+| Document | Contents |
+|----------|----------|
+| [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) | Step-by-step usage: concepts, agent install, Framework & Core integration |
+| [docs/PRD-compliance.md](docs/PRD-compliance.md) | Mapping to the IIS .NET PRD |
 
 ## License
 
