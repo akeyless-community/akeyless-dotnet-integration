@@ -14,6 +14,9 @@ namespace Akeyless.IIS.Agent.Services;
 /// </summary>
 public sealed class GatewaySecretService : IGatewaySecretService
 {
+    private static readonly TimeSpan ReadinessCacheTtl = TimeSpan.FromSeconds(15);
+    private const string ReadinessCacheKey = "gateway:readiness";
+
     private readonly AgentOptions _options;
     private readonly IMemoryCache _cache;
     private readonly ILogger<GatewaySecretService> _logger;
@@ -27,6 +30,99 @@ public sealed class GatewaySecretService : IGatewaySecretService
         _options = options.Value;
         _cache = cache;
         _logger = logger;
+    }
+
+    public Task<GatewayReadinessResult> CheckGatewayReadyAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_cache.TryGetValue(ReadinessCacheKey, out GatewayReadinessResult? cached) && cached != null)
+        {
+            return Task.FromResult(cached);
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.AccessId) || string.IsNullOrWhiteSpace(_options.AccessKey))
+        {
+            return Task.FromResult(CacheReadiness(GatewayReadinessResult.MissingCredentials()));
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.GatewayUrl))
+        {
+            return Task.FromResult(CacheReadiness(
+                GatewayReadinessResult.Unreachable("GatewayUrl is not configured.")));
+        }
+
+        try
+        {
+            // Force a fresh Auth against the configured Gateway (validates URL + credentials).
+            lock (_tokenLock)
+            {
+                _cachedToken = null;
+                _tokenExpiresUtc = DateTimeOffset.MinValue;
+            }
+
+            _ = GetOrRefreshToken();
+            var result = GatewayReadinessResult.Ok();
+            _logger.LogInformation("Gateway readiness probe succeeded.");
+            return Task.FromResult(CacheReadiness(result));
+        }
+        catch (Exception ex)
+        {
+            var result = ClassifyReadinessFailure(ex);
+            _logger.LogWarning(
+                "Gateway readiness probe failed: gateway={Gateway} detail={Detail}",
+                result.Gateway,
+                result.Detail);
+            return Task.FromResult(CacheReadiness(result));
+        }
+    }
+
+    private GatewayReadinessResult CacheReadiness(GatewayReadinessResult result)
+    {
+        _cache.Set(ReadinessCacheKey, result, ReadinessCacheTtl);
+        return result;
+    }
+
+    private static GatewayReadinessResult ClassifyReadinessFailure(Exception ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        var combined = ex.ToString();
+
+        if (message.Contains("credentials missing", StringComparison.OrdinalIgnoreCase) ||
+            (message.Contains("AccessId", StringComparison.OrdinalIgnoreCase) &&
+             message.Contains("AccessKey", StringComparison.OrdinalIgnoreCase)))
+        {
+            return GatewayReadinessResult.MissingCredentials();
+        }
+
+        if (message.Contains("authentication failed", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("401", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("403", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("Forbidden", StringComparison.OrdinalIgnoreCase))
+        {
+            return GatewayReadinessResult.AuthFailed("Gateway rejected AccessId/AccessKey authentication.");
+        }
+
+        if (combined.Contains("NameResolutionFailure", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("No such host", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("nodename nor servname", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("getaddrinfo", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("DNS", StringComparison.OrdinalIgnoreCase))
+        {
+            return GatewayReadinessResult.Unreachable("Gateway host could not be resolved (check GatewayUrl).");
+        }
+
+        if (combined.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("actively refused", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("Connection refused", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("NetworkUnreachable", StringComparison.OrdinalIgnoreCase))
+        {
+            return GatewayReadinessResult.Unreachable("Gateway could not be reached (network or GatewayUrl).");
+        }
+
+        return GatewayReadinessResult.Unreachable("Gateway connectivity or authentication check failed.");
     }
 
     public Task<IReadOnlyDictionary<string, string>> ResolvePathsAsync(

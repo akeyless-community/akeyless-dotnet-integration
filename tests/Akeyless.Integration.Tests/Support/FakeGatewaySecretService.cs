@@ -24,11 +24,23 @@ public sealed class FakeGatewaySecretService : IGatewaySecretService
         });
     }
 
+    /// <summary>When set, readiness returns this result; otherwise returns healthy.</summary>
+    public GatewayReadinessResult? ReadinessResult { get; set; }
+
+    public int ReadinessCallCount { get; private set; }
+
     public Task<IReadOnlyDictionary<string, string>> ResolvePathsAsync(
         IReadOnlyList<string> normalizedPaths,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_resolver(normalizedPaths));
+    }
+
+    public Task<GatewayReadinessResult> CheckGatewayReadyAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ReadinessCallCount++;
+        return Task.FromResult(ReadinessResult ?? GatewayReadinessResult.Ok());
     }
 }

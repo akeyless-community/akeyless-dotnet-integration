@@ -130,7 +130,7 @@ dotnet test Akeyless.DotNet.Samples.sln -c Release
 **What this validates:**
 
 - `akeyless://` parsing and path normalization
-- Agent endpoints: `/health`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`
+- Agent endpoints: `/health`, `/health/ready`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`
 - Configuration discovery from JSON, XML, and environment variables
 - HTTP client serialization for the agent API
 
@@ -172,13 +172,23 @@ After start, verify:
 GET http://127.0.0.1:17890/health
 ```
 
-Expected: JSON with `"status":"ok"` and `"role":"akeyless-iis-agent"`.
+Expected: JSON with `"status":"ok"` and `"role":"akeyless-iis-agent"` (process liveness only).
+
+Also verify Gateway connectivity and credentials:
+
+```text
+GET http://127.0.0.1:17890/health/ready
+```
+
+Expected when configured correctly: HTTP **200** with `"status":"healthy"` and `"gateway":"reachable"`.  
+If `GatewayUrl` is wrong or credentials fail: HTTP **503** with `"status":"unhealthy"` and `gateway` set to `unreachable`, `auth_failed`, or `missing_credentials` (no secret values in the body).
 
 ### 7.4 Agent HTTP API
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/health` | — | Liveness |
+| GET | `/health` | — | **Liveness** (process up; does not check Gateway) |
+| GET | `/health/ready` | — | **Readiness** (Auth to Gateway with AccessId/AccessKey; HTTP 200 / 503) |
 | POST | `/api/v1/resolve` | `{ "paths": ["/path/a"] }` | `{ "pathToValue": { "/path/a": "..." } }` |
 | POST | `/api/v1/discover-and-resolve` | `{ "configurationFilePath": "C:\\...\\web.config" }` | Map of logical config keys to resolved values |
 
@@ -377,7 +387,7 @@ on the application process instead.
 | **Rotate Gateway API key** | Update agent service config / env; restart the service |
 | **Add a new site** | Add `akeyless://` in config; ensure pool has `AKEYLESS_AGENT_URL`; call startup enrichment |
 | **New `web.config` path for discover-and-resolve** | Add directory prefix to `AllowedConfigurationRoots` |
-| **Verify agent health** | `GET /health` on loopback |
+| **Verify agent health** | `GET /health` (liveness) and `GET /health/ready` (Gateway Auth) on loopback |
 | **Verify app can resolve** | Recycle pool; confirm app starts; check logs (counts only, no secret values) |
 
 ---
@@ -388,6 +398,7 @@ on the application process instead.
 |---------|--------------|---------------|
 | Startup exception about `AKEYLESS_AGENT_URL` or Access ID/Key | App has `akeyless://` but no way to fetch | Set agent URL on pool, or direct Gateway credentials on process |
 | HTTP 403 from agent | Client not on loopback | App must call `127.0.0.1` / `localhost`, not server hostname |
+| `/health` ok but `/health/ready` unhealthy | Bad `GatewayUrl`, network, or AccessId/AccessKey | Fix agent `AkeylessAgent` settings; readiness reports `unreachable`, `auth_failed`, or `missing_credentials` |
 | Secret path not found | Wrong path or ACL | Path in config matches Akeyless item; API key can read it |
 | `discover-and-resolve` fails | Path outside allowlist | Add site root to `AllowedConfigurationRoots` |
 | Framework app still shows `akeyless://` at runtime | Enrichment did not patch that key | Use `AppConfiguration` in your central helper; verify `EnrichConfigurationAtStartup()` runs first in `Application_Start` |
@@ -409,7 +420,7 @@ on the application process instead.
 
 ## 14. What has been tested
 
-Automated tests live in **`tests/Akeyless.Integration.Tests`** (xUnit, **20 tests**). They run locally with:
+Automated tests live in **`tests/Akeyless.Integration.Tests`** (xUnit, **23 tests**). They run locally with:
 
 ```bash
 dotnet test Akeyless.DotNet.Samples.sln -c Release
@@ -422,7 +433,7 @@ The same command runs on **GitHub Actions** for every push and pull request to `
 | Area | What is verified |
 |------|------------------|
 | **`akeyless://` parsing** | Valid references normalize to paths with a leading `/`; invalid or non-Akeyless URIs are rejected (`SecretReferenceParserTests`). |
-| **Agent HTTP API** | `GET /health`; `POST /api/v1/resolve` (path normalization, batch resolve, empty body); `POST /api/v1/discover-and-resolve` on an allowlisted `web.config` (`AgentApiTests`). |
+| **Agent HTTP API** | `GET /health` (liveness); `GET /health/ready` (healthy / 503 unhealthy for unreachable or auth failure); `POST /api/v1/resolve` (path normalization, batch resolve, empty body); `POST /api/v1/discover-and-resolve` on an allowlisted `web.config` (`AgentApiTests`). |
 | **Agent allowlist** | `discover-and-resolve` returns **403** when the config file path is outside `AllowedConfigurationRoots` (`AgentApiTests`, `AllowedPathValidatorTests`). |
 | **XML config discovery (agent)** | `appSettings` and `connectionStrings` in a single `web.config`; following **`appSettings configSource`** to an external file (`ConfigurationDiscoveryServiceTests`). |
 | **ASP.NET Core config discovery** | Nested `IConfiguration` keys; env vars whose **value** is `akeyless://`; parsing `AKEYLESS_SECRET_NAMES` (`ConfigurationSecretDiscoveryNet8Tests`). |

@@ -71,6 +71,22 @@ var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.C
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", role = "akeyless-iis-agent" }));
 
+app.MapGet("/health/ready", async (IGatewaySecretService gw, CancellationToken ct) =>
+{
+    var probe = await gw.CheckGatewayReadyAsync(ct).ConfigureAwait(false);
+    var body = new
+    {
+        status = probe.IsReady ? "healthy" : "unhealthy",
+        role = "akeyless-iis-agent",
+        gateway = probe.Gateway,
+        detail = probe.Detail,
+    };
+
+    return probe.IsReady
+        ? Results.Json(body, json)
+        : Results.Json(body, json, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
+
 app.MapPost("/api/v1/resolve", async (ResolveByPathsRequest req, IGatewaySecretService gw, CancellationToken ct) =>
 {
     if (req.Paths == null || req.Paths.Count == 0)

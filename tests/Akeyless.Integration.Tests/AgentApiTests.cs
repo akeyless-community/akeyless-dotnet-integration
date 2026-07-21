@@ -61,6 +61,73 @@ public sealed class AgentApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Health_ready_returns_healthy_when_gateway_probe_ok()
+    {
+        var client = _factory.CreateClient();
+        var res = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.Contains("\"status\":\"healthy\"", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"gateway\":\"reachable\"", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AccessKey", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Health_ready_returns_503_when_gateway_unreachable()
+    {
+        var fake = new FakeGatewaySecretService
+        {
+            ReadinessResult = GatewayReadinessResult.Unreachable("Gateway host could not be resolved (check GatewayUrl)."),
+        };
+        await using var factory = new AgentWebApplicationFactory(
+            new Dictionary<string, string?>
+            {
+                ["AkeylessAgent:ListenUrl"] = "http://127.0.0.1:0",
+                ["AkeylessAgent:GatewayUrl"] = "https://dummy.url",
+                ["AkeylessAgent:AccessId"] = "test",
+                ["AkeylessAgent:AccessKey"] = "test",
+                ["AkeylessAgent:CacheTtlSeconds"] = "60",
+                ["AkeylessAgent:AllowedConfigurationRoots:0"] = _tempRoot,
+            },
+            fake);
+
+        var client = factory.CreateClient();
+        var res = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.Contains("\"status\":\"unhealthy\"", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"gateway\":\"unreachable\"", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AccessKey", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Health_ready_returns_503_when_auth_failed()
+    {
+        var fake = new FakeGatewaySecretService
+        {
+            ReadinessResult = GatewayReadinessResult.AuthFailed("Gateway rejected AccessId/AccessKey authentication."),
+        };
+        await using var factory = new AgentWebApplicationFactory(
+            new Dictionary<string, string?>
+            {
+                ["AkeylessAgent:ListenUrl"] = "http://127.0.0.1:0",
+                ["AkeylessAgent:GatewayUrl"] = "https://api.akeyless.io",
+                ["AkeylessAgent:AccessId"] = "bad",
+                ["AkeylessAgent:AccessKey"] = "bad",
+                ["AkeylessAgent:CacheTtlSeconds"] = "60",
+                ["AkeylessAgent:AllowedConfigurationRoots:0"] = _tempRoot,
+            },
+            fake);
+
+        var client = factory.CreateClient();
+        var res = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.Contains("\"status\":\"unhealthy\"", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"gateway\":\"auth_failed\"", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Resolve_normalizes_paths_and_returns_values()
     {
         var client = _factory.CreateClient();

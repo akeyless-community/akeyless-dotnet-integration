@@ -27,7 +27,7 @@ The **`Akeyless.IIS.Agent`** project is a **.NET 8** executable intended to run 
 
 - Listens only on **loopback** (default `http://127.0.0.1:17890`; validated at startup).
 - Authenticates to the **Akeyless Gateway** and maintains an **in-memory cache** with TTL (`AkeylessAgent:CacheTtlSeconds`).
-- Exposes **`POST /api/v1/resolve`** (batch paths → values) and **`POST /api/v1/discover-and-resolve`** (parse an allowlisted `web.config` path and resolve all `akeyless://` entries).
+- Exposes **`GET /health`** (liveness), **`GET /health/ready`** (Gateway Auth readiness), **`POST /api/v1/resolve`**, and **`POST /api/v1/discover-and-resolve`**.
 
 **IIS application pools** should set **`AKEYLESS_AGENT_URL`** to the agent base URL. They **do not** need `AKEYLESS_ACCESS_ID` / `AKEYLESS_ACCESS_KEY` when the agent is used.
 
@@ -178,7 +178,7 @@ dotnet test Akeyless.DotNet.Samples.sln -c Release
 
 `tests/Akeyless.Integration.Tests` (xUnit) covers:
 
-- **IIS Agent HTTP API** (`/health`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`) using `WebApplicationFactory` with a **fake** gateway (no real Akeyless calls).
+- **IIS Agent HTTP API** (`/health`, `/health/ready`, `/api/v1/resolve`, `/api/v1/discover-and-resolve`) using `WebApplicationFactory` with a **fake** gateway (no real Akeyless calls).
 - **`Akeyless.Agent.Client`** HTTP serialization against a stub handler.
 - **`SecretReferenceParser`**, **`AllowedPathValidator`**, **`ConfigurationDiscoveryService`** (XML + `configSource`), and **ASP.NET Core `ConfigurationSecretDiscovery`**.
 
