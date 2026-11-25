@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "nuget"
+    directories:
+      - "/src/Akeyless.Agent.Client"
+      - "/src/Akeyless.Bootstrap.Net472"
+      - "/src/Akeyless.IIS.Agent"
+      - "/src/Akeyless.WebApp.Net8"
+      - "/tests/Akeyless.Integration.Tests"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
